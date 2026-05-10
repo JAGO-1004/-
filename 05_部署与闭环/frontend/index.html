@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>零售宅抵贷智能审批系统</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #f0f2f5; color: #333; }
+.header { background: #1a1a2e; color: #fff; padding: 16px 32px; }
+.header h1 { font-size: 20px; }
+.header span { color: #888; font-size: 13px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.card-header { padding: 16px 20px; border-bottom: 1px solid #eee; font-weight: 600; font-size: 15px; }
+.card-body { padding: 20px; }
+
+.steps { display: flex; gap: 0; margin-bottom: 24px; }
+.step { flex: 1; text-align: center; padding: 12px 8px; font-size: 13px; background: #e8e8e8; color: #999; position: relative; }
+.step.active { background: #1a73e8; color: #fff; }
+.step.done { background: #34a853; color: #fff; }
+.step:not(:last-child)::after { content: ''; position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+  border: 5px solid transparent; border-left-color: #e8e8e8; }
+.step.active::after { border-left-color: #1a73e8; }
+.step.done::after { border-left-color: #34a853; }
+
+.field-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.field-label { color: #666; }
+.field-value { font-weight: 500; }
+.field-value.disputed { color: #d93025; cursor: pointer; }
+.field-value.approved { color: #188038; }
+
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.tag-approve { background: #e6f4ea; color: #188038; }
+.tag-review { background: #fef7e0; color: #ea8600; }
+.tag-reject { background: #fce8e6; color: #d93025; }
+.tag-pending { background: #e8e8e8; color: #666; }
+
+.score-bar { height: 8px; background: #eee; border-radius: 4px; margin: 8px 0; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; background: #1a73e8; }
+.score-bar-fill.approve { background: #34a853; }
+.score-bar-fill.review { background: #ea8600; }
+.score-bar-fill.reject { background: #d93025; }
+
+.btn { padding: 10px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.btn-primary { background: #1a73e8; color: #fff; }
+.btn-primary:hover { background: #1557b0; }
+.btn-success { background: #34a853; color: #fff; }
+.btn-danger { background: #d93025; color: #fff; }
+.btn-outline { background: #fff; border: 1px solid #dadce0; }
+.btn-outline:hover { background: #f8f9fa; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.upload-zone { border: 2px dashed #dadce0; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
+.upload-zone:hover { border-color: #1a73e8; background: #f8f9ff; }
+.upload-zone.dragover { border-color: #1a73e8; background: #e8f0fe; }
+.upload-zone p { color: #666; margin-top: 8px; }
+
+.review-item { padding: 12px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px; }
+.review-item .header { background: none; color: #333; padding: 0 0 8px 0; font-size: 14px; }
+.review-item .models { font-size: 12px; color: #666; }
+.review-item .models span { display: inline-block; margin: 2px 4px; }
+
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+.modal.active { display: flex; }
+.modal-content { background: #fff; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+.modal-content h3 { margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+.tabs { display: flex; gap: 0; margin-bottom: 16px; }
+.tab { padding: 8px 20px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; color: #666; }
+.tab.active { border-bottom-color: #1a73e8; color: #1a73e8; font-weight: 500; }
+
+.hidden { display: none; }
+.flex { display: flex; gap: 8px; align-items: center; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+.text-center { text-align: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>零售宅抵贷 · 智能审批系统</h1>
+  <span>AI-native 全流程自动化审批 | v1.0</span>
+</div>
+
+<div class="container">
+  <!-- 步骤条 -->
+  <div class="steps" id="stepBar">
+    <div class="step" id="s1">1. 文档分类</div>
+    <div class="step" id="s2">2. 信息抽取</div>
+    <div class="step" id="s3">3. 微调训练</div>
+    <div class="step" id="s4">4. 智能决策</div>
+    <div class="step" id="s5">5. 部署闭环</div>
+  </div>
+
+  <!-- 标签页 -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('pipeline')">全流程审批</div>
+    <div class="tab" onclick="switchTab('review')">标注审核</div>
+    <div class="tab" onclick="switchTab('stats')">系统统计</div>
+  </div>
+
+  <!-- 全流程审批 -->
+  <div id="tabPipeline" class="layout">
+    <div>
+      <div class="card">
+        <div class="card-header">上传进件材料</div>
+        <div class="card-body">
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()"
+               ondragover="event.preventDefault();this.classList.add('dragover')"
+               ondragleave="this.classList.remove('dragover')"
+               ondrop="event.preventDefault();handleFile(event.dataTransfer.files[0])">
+            <div style="font-size:40px;color:#1a73e8;">+</div>
+            <p>拖拽证件图像到此处，或点击选择文件</p>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFile(this.files[0])">
+          <div id="fileInfo" class="hidden mt-16"></div>
+          <div id="ocrInput" class="hidden mt-16">
+            <textarea id="ocrText" rows="3" style="width:100%;padding:8px;border:1px solid #dadce0;border-radius:4px;font-size:13px;" placeholder="可选: 输入 OCR 文本辅助分类"></textarea>
+          </div>
+          <button class="btn btn-primary mt-16" id="btnPipeline" onclick="runPipeline()" disabled>开始全流程审批</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">审批结论</div>
+        <div class="card-body" id="conclusionArea">
+          <div style="color:#999;text-align:center;padding:20px;">等待审批...</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-header">提取字段</div>
+        <div class="card-body" id="fieldsArea">
+          <div style="color:#999;text-align:center;padding:20px;">暂无数据</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">处理日志</div>
+        <div class="card-body" id="logArea" style="max-height:300px;overflow-y:auto;font-size:12px;color:#666;font-family:monospace;">
+          <div>等待开始...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 标注审核 -->
+  <div id="tabReview" class="hidden">
+    <div class="card">
+      <div class="card-header">待审核标注记录</div>
+      <div class="card-body" id="reviewList">
+        <div style="color:#999;text-align:center;padding:20px;">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 系统统计 -->
+  <div id="tabStats" class="hidden">
+    <div class="card">
+      <div class="card-header">系统运行统计</div>
+      <div class="card-body" id="statsArea">
+        <div style="color:#999;text-align:center;padding:20px;">加载中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 审核弹窗 -->
+<div class="modal" id="reviewModal">
+  <div class="modal-content">
+    <h3>人工审核</h3>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="submitReview()">确认提交</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let currentFile = null;
+
+function log(msg) {
+  const el = document.getElementById('logArea');
+  const t = new Date().toLocaleTimeString();
+  el.innerHTML += `<div>[${t}] ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id^="tab"]').forEach(t => t.classList.add('hidden'));
+  if (name === 'pipeline') {
+    document.querySelector('.tabs .tab:nth-child(1)').classList.add('active');
+    document.getElementById('tabPipeline').classList.remove('hidden');
+  } else if (name === 'review') {
+    document.querySelector('.tabs .tab:nth-child(2)').classList.add('active');
+    document.getElementById('tabReview').classList.remove('hidden');
+    loadReviews();
+  } else {
+    document.querySelector('.tabs .tab:nth-child(3)').classList.add('active');
+    document.getElementById('tabStats').classList.remove('hidden');
+    loadStats();
+  }
+}
+
+function handleFile(file) {
+  if (!file) return;
+  currentFile = file;
+  document.getElementById('fileInfo').innerHTML = `<div class="flex"><span>✓</span><span>${file.name}</span><span style="color:#999;font-size:12px;">(${(file.size/1024).toFixed(0)}KB)</span></div>`;
+  document.getElementById('fileInfo').classList.remove('hidden');
+  document.getElementById('ocrInput').classList.remove('hidden');
+  document.getElementById('btnPipeline').disabled = false;
+  document.getElementById('uploadZone').querySelector('p').textContent = file.name;
+  log(`已选择文件: ${file.name}`);
+}
+
+async function runPipeline() {
+  const file = currentFile;
+  if (!file) return;
+  const btn = document.getElementById('btnPipeline');
+  btn.disabled = true; btn.textContent = '处理中...';
+
+  const ocrText = document.getElementById('ocrText').value;
+  const formData = new FormData();
+  formData.append('file', file);
+  if (ocrText) formData.append('ocr_text', ocrText);
+
+  // 更新步骤状态
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active', 'done'));
+  document.getElementById('s1').classList.add('active');
+
+  try {
+    log('开始全流程审批...');
+    const resp = await fetch(`${API}/pipeline`, { method: 'POST', body: formData });
+    const result = await resp.json();
+    log('审批完成');
+
+    if (result.code !== 0) {
+      log(`错误: ${JSON.stringify(result)}`);
+      return;
+    }
+
+    const data = result.data;
+
+    // 步骤状态
+    document.querySelectorAll('.step').forEach(s => s.classList.add('done'));
+    document.getElementById('s5').classList.add('active');
+
+    // 显示字段
+    const fields = data.step2_extraction?.fields || {};
+    const disagreements = data.step2_extraction?.disagreements || [];
+    const fieldsHtml = Object.entries(fields).map(([k, v]) => {
+      const disputed = disagreements.some(d => d.field === k);
+      return `<div class="field-row">
+        <span class="field-label">${k}</span>
+        <span class="field-value ${disputed ? 'disputed' : 'approved'}">${v || '(空)'}${disputed ? ' ⚠' : ''}</span>
+      </div>`;
+    }).join('');
+    document.getElementById('fieldsArea').innerHTML = fieldsHtml;
+
+    // 显示结论
+    const decision = data.step4_decision || {};
+    const icons = {approve: '✓ 通过', review: '△ 需复核', reject: '✗ 拒绝'};
+    const tags = {approve: 'tag-approve', review: 'tag-review', reject: 'tag-reject'};
+    document.getElementById('conclusionArea').innerHTML = `
+      <div style="text-align:center;padding:16px;">
+        <span class="tag ${tags[decision.decision] || ''}" style="font-size:18px;padding:6px 20px;">
+          ${icons[decision.decision] || decision.decision} — ${decision.score}/100
+        </span>
+      </div>
+      <div class="score-bar"><div class="score-bar-fill ${decision.decision}" style="width:${decision.score}%"></div></div>
+      ${decision.final_report?.conclusion ? `<p style="margin-top:12px;font-size:14px;color:#333;">${decision.final_report.conclusion}</p>` : ''}
+      ${decision.final_report?.conditions?.length ? `<div style="margin-top:12px;"><strong>放款条件:</strong><ul style="margin:8px 0 0 16px;font-size:13px;color:#666;">${decision.final_report.conditions.map(c => `<li>${c}</li>`).join('')}</ul></div>` : ''}
+      <div style="margin-top:12px;font-size:12px;color:#999;display:flex;gap:16px;">
+        <span>耗时: ${data.processing_time || 0}s</span>
+        <span>成本: $${data.step2_extraction?.cost || 0}</span>
+      </div>
+    `;
+
+    // 风险规则详情
+    const re = decision.rule_engine || {};
+    if (re.reject_reasons?.length) {
+      log(`拒绝原因: ${re.reject_reasons.join('; ')}`);
+    }
+
+  } catch (e) {
+    log(`请求失败: ${e.message}`);
+  } finally {
+    btn.disabled = false; btn.textContent = '开始全流程审批';
+  }
+}
+
+async function loadReviews() {
+  try {
+    const resp = await fetch(`${API}/review/pending`);
+    const result = await resp.json();
+    const records = result.data || [];
+    const el = document.getElementById('reviewList');
+
+    if (records.length === 0) {
+      el.innerHTML = '<div style="color:#999;text-align:center;padding:20px;">暂无待审核记录</div>';
+      return;
+    }
+
+    el.innerHTML = records.map(rec => {
+      const disagreements = rec.disagreements || [];
+      return `<div class="review-item">
+        <div class="header flex">
+          <span class="tag tag-pending">待审核</span>
+          <span style="font-weight:500;">${rec.doc_type}</span>
+          <span style="color:#999;font-size:12px;">${rec.id}</span>
+        </div>
+        ${disagreements.map(d => `
+          <div style="margin:4px 0;padding:8px;background:#fff8e1;border-radius:4px;">
+            <div style="font-weight:500;font-size:13px;">${d.field}</div>
+            <div style="font-size:12px;color:#666;margin-top:4px;">建议值: <strong>${d.suggested}</strong></div>
+            <div class="models">${Object.entries(d.votes || {}).map(([m, v]) => `<span class="tag tag-pending">${m}: ${v}</span>`).join(' ')}</div>
+          </div>
+        `).join('')}
+        <button class="btn btn-outline mt-16" onclick='openReview("${rec.id}", ${JSON.stringify(JSON.stringify(rec.fields))})'>审核</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('reviewList').innerHTML = `<div style="color:#d93025;">加载失败: ${e.message}</div>`;
+  }
+}
+
+function openReview(id, fieldsStr) {
+  const fields = JSON.parse(fieldsStr);
+  let html = `<p style="color:#666;font-size:13px;">记录: ${id}</p><div style="margin-top:12px;">`;
+  for (const [k, v] of Object.entries(fields)) {
+    html += `<div class="field-row">
+      <span class="field-label">${k}</span>
+      <input type="text" value="${v || ''}" data-field="${k}" style="border:1px solid #dadce0;border-radius:4px;padding:4px 8px;width:200px;font-size:13px;">
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('reviewModal').dataset.recordId = id;
+  document.getElementById('reviewModal').classList.add('active');
+}
+
+async function submitReview() {
+  const id = document.getElementById('reviewModal').dataset.recordId;
+  const corrections = {};
+  document.querySelectorAll('#modalBody input[data-field]').forEach(inp => {
+    const val = inp.value.trim();
+    if (val) corrections[inp.dataset.field] = val;
+  });
+
+  try {
+    const resp = await fetch(`${API}/review/${id}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ corrections, reviewer: '审批师' }),
+    });
+    const result = await resp.json();
+    if (result.code === 0) {
+      closeModal();
+      loadReviews();
+    }
+  } catch (e) {
+    alert(`提交失败: ${e.message}`);
+  }
+}
+
+function closeModal() {
+  document.getElementById('reviewModal').classList.remove('active');
+}
+
+async function loadStats() {
+  try {
+    const resp = await fetch(`${API}/stats`);
+    const result = await resp.json();
+    const data = result.data || {};
+
+    const decisions = data.decisions || {};
+    const total = Object.values(decisions).reduce((a, b) => a + b, 0) || 1;
+
+    document.getElementById('statsArea').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;margin-bottom:20px;">
+        <div style="text-align:center;padding:20px;background:#e8f0fe;border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:#1a73e8;">${data.total_pipelines || 0}</div>
+          <div style="font-size:13px;color:#666;">总审批数</div>
+        </div>
+        <div style="text-align:center;padding:20px;background:#e6f4ea;border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:#34a853;">${decisions.approve || 0}</div>
+          <div style="font-size:13px;color:#666;">通过</div>
+        </div>
+        <div style="text-align:center;padding:20px;background:#fce8e6;border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;color:#d93025;">${decisions.reject || 0}</div>
+          <div style="font-size:13px;color:#666;">拒绝</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:16px;">
+        <div style="padding:16px;border:1px solid #eee;border-radius:8px;text-align:center;">
+          <div style="font-size:20px;font-weight:600;">${decisions.review || 0}</div>
+          <div style="font-size:13px;color:#666;">需人工复核</div>
+        </div>
+        <div style="padding:16px;border:1px solid #eee;border-radius:8px;text-align:center;">
+          <div style="font-size:20px;font-weight:600;">${data.avg_processing_time || 0}s</div>
+          <div style="font-size:13px;color:#666;">平均处理耗时</div>
+        </div>
+        <div style="padding:16px;border:1px solid #eee;border-radius:8px;text-align:center;">
+          <div style="font-size:20px;font-weight:600;">${data.review?.completion_rate || 0}%</div>
+          <div style="font-size:13px;color:#666;">标注完成率</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('statsArea').innerHTML = `<div style="color:#d93025;">加载失败: ${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>
