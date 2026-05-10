@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# API Keys 敏感信息
+.env
+.env.local
+
+# 标注结果 / 训练数据（可能含敏感字段）
+*.json
+data/
+
+# 模型文件（可从 HuggingFace 重新下载）
+*.pt
+*.pth
+*.bin
+*.safetensors
+!*.py
+
+# 证件图像（含敏感信息）
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+*.tiff
+
+# OS
+.DS_Store
+Thumbs.db
